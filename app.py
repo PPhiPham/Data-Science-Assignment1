@@ -13,15 +13,15 @@ from bokeh.layouts import row, column, gridplot
 from bokeh.models import Tabs, Panel
 
 # Pad naar de map met CSV-bestanden
-data_path = os.path.join(os.getcwd(), "data")  # Zorgt ervoor dat het correct laadt
+data_path = os.path.join(os.getcwd(), "data")
 
 # Zoek alle CSV-bestanden in map
 csv_files = glob.glob(os.path.join(data_path, "*.csv"))
 
-# Laad en filter de data
+# Laad en filtert de data
 dataframes = []
 for file in csv_files:
-    # Encoding detecten
+    # Encoding detecten, want ik kreeg csv niet gelezen
     with open(file, "rb") as f:
         result = chardet.detect(f.read(100000))
         detected_encoding = result["encoding"]
