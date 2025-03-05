@@ -38,7 +38,7 @@ for file in csv_files:
         # Filter op de juiste product id en alleen "Charge"
         df = df[
             (df["Product id"] == "com.vansteinengroentjes.apps.ddfive") &
-            (df["Transaction Type"] == "Charge")
+            (df["Transaction Type"] == "Charge") # Charge en Google fee
         ]
         if "Transaction Date" in df.columns:
             df["Transaction Date"] = pd.to_datetime(df["Transaction Date"], errors='coerce')
