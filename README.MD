@@ -16,4 +16,6 @@ On Windows: .\venv\Scripts\activate
 
 pip install -r requirements.txt
 
-# 5. 
+# 5. Graphs show
+
+bokeh serve --show app.py
