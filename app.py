@@ -9,7 +9,7 @@ import chardet
 from bokeh.io import curdoc
 from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
-                          Select, HoverTool, GeoJSONDataSource, Panel, Tabs, TabPanel)
+                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel)
 from bokeh.layouts import row, column
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Plasma256
@@ -320,8 +320,7 @@ p4.add_tools(hovertool)
 
 # =====================================================================
 # 6) LAYOUT (Tabs)
-# =====================================================================
-from bokeh.models import Panel, Tabs
+# ===================================================================== 
 
 tab1 = TabPanel(child=p1, title="Sales Over Tijd")
 tab2 = TabPanel(child=column(select_sku, p2), title="Sales per SKU")
