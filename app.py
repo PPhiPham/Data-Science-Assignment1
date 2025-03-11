@@ -35,7 +35,6 @@ for file in csv_files:
 
     # Sales data herkennen
     if "Transaction Type" in df.columns or "Financial Status" in df.columns:
-        # Filter op de juiste product id
         if "Product ID" in df.columns:
             df.rename(columns={"Product ID": "Product id"}, inplace=True)
         if "Order Charged Date" in df.columns:
@@ -44,6 +43,8 @@ for file in csv_files:
             df.rename(columns={"Financial Status": "Transaction Type"}, inplace=True)
         if "Currency of Sale" in df.columns:
             df.rename(columns={"Currency of Sale": "Buyer Currency"}, inplace=True)
+        if "SKU ID" in df.columns:
+            df.rename(columns={"SKU ID": "Sku Id"}, inplace=True)
         df["Transaction Type"] = df["Transaction Type"].replace({
             "Charged": "Charge",
             "Refund": "Google fee"
