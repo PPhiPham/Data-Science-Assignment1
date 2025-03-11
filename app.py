@@ -34,15 +34,27 @@ for file in csv_files:
     df = pd.read_csv(file, encoding=detected_encoding)
 
     # Sales data herkennen
-    if "Product id" in df.columns and "Transaction Type" in df.columns:
-        # Filter op de juiste product id en alleen "Charge"
+    if "Transaction Type" in df.columns or "Financial Status" in df.columns:
+        # Filter op de juiste product id
+        if "Product ID" in df.columns:
+            df.rename(columns={"Product ID": "Product id"}, inplace=True)
+        if "Order Charged Date" in df.columns:
+            df.rename(columns={"Order Charged Date": "Transaction Date"}, inplace=True)
+        if "Financial Status" in df.columns:
+            df.rename(columns={"Financial Status": "Transaction Type"}, inplace=True)
+        if "Currency of Sale" in df.columns:
+            df.rename(columns={"Currency of Sale": "Buyer Currency"}, inplace=True)
+        df["Transaction Type"] = df["Transaction Type"].replace({
+            "Charged": "Charge",
+            "Refund": "Google fee"
+        })
         df = df[
-            (df["Product id"] == "com.vansteinengroentjes.apps.ddfive") &
-            (df["Transaction Type"] == "Charge") # Charge en Google fee
-        ]
+            (df["Product id"] == "com.vansteinengroentjes.apps.ddfive")    
+        ]        
         if "Transaction Date" in df.columns:
             df["Transaction Date"] = pd.to_datetime(df["Transaction Date"], errors='coerce')
         sales_data.append(df)
+
 
     # Crash data herkennen
     elif "Daily Crashes" in df.columns and "Daily ANRs" in df.columns:
@@ -51,10 +63,40 @@ for file in csv_files:
         crash_data.append(df)
 
     # Ratings data herkennen
-    elif "Daily Average Rating" in df.columns and "Total Average Rating" in df.columns:
+    elif "Daily Average Rating" in df.columns and "Country" in df.columns:
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
         ratings_data.append(df)
+
+conversion_rate_list = []
+for df in sales_data:
+    if "Currency Conversion Rate" in df.columns:
+        conversion_rate_list.append(df[["Buyer Currency", "Currency Conversion Rate"]])
+
+if conversion_rate_list:
+    conversion_df = pd.concat(conversion_rate_list, ignore_index=True)
+    mean_conversions = conversion_df.groupby("Buyer Currency")["Currency Conversion Rate"].mean()
+
+for idx, df in enumerate(sales_data):
+    if "Currency Conversion Rate" not in df.columns:
+        df["Currency Conversion Rate"] = df["Buyer Currency"].map(mean_conversions)
+        sales_data[idx] = df
+
+for idx, df in enumerate(sales_data):
+    if "Amount (Merchant Currency)" not in df.columns:
+        df["Charged Amount"] = pd.to_numeric(df["Charged Amount"], errors='coerce')
+        df["Currency Conversion Rate"] = pd.to_numeric(df["Currency Conversion Rate"], errors='coerce')
+        df["Amount (Merchant Currency)"] = df["Charged Amount"] * df["Currency Conversion Rate"]
+        sales_data[idx] = df
+   
+print(mean_conversions)
+
+print("=== Sales DataFrames ===")
+for i, df in enumerate(sales_data):
+    print(f"\nSales DataFrame {i}:")
+    print(df.head()) 
+    print("-" * 40)
+
 
 # Concateneren tot DataFrames
 df_sales = pd.concat(sales_data, ignore_index=True) if sales_data else pd.DataFrame()
