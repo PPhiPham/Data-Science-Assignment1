@@ -23,7 +23,8 @@ csv_files = glob.glob(os.path.join(data_path, "*.csv"))
 
 sales_data = []
 crash_data = []
-ratings_data = []
+ratings_data_country = []
+ratings_data_overview = []
 
 for file in csv_files:
     # Encoding detecten
@@ -63,12 +64,18 @@ for file in csv_files:
             df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
         crash_data.append(df)
 
-    # Ratings data herkennen
+    # Ratings_country data herkennen
     elif "Daily Average Rating" in df.columns and "Country" in df.columns:
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
-        ratings_data.append(df)
-
+        ratings_data_country.append(df)
+    
+    # Rating_overview
+    elif "Daily Average Rating" in df.columns and "Country" not in df.columns:
+        if "Date" in df.columns:
+            df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
+        ratings_data_overview.append(df)
+    
 conversion_rate_list = []
 for df in sales_data:
     if "Currency Conversion Rate" in df.columns:
@@ -90,19 +97,11 @@ for idx, df in enumerate(sales_data):
         df["Amount (Merchant Currency)"] = df["Charged Amount"] * df["Currency Conversion Rate"]
         sales_data[idx] = df
    
-print(mean_conversions)
-
-print("=== Sales DataFrames ===")
-for i, df in enumerate(sales_data):
-    print(f"\nSales DataFrame {i}:")
-    print(df.head()) 
-    print("-" * 40)
-
-
 # Concateneren tot DataFrames
 df_sales = pd.concat(sales_data, ignore_index=True) if sales_data else pd.DataFrame()
 df_crashes = pd.concat(crash_data, ignore_index=True) if crash_data else pd.DataFrame()
-df_ratings = pd.concat(ratings_data, ignore_index=True) if ratings_data else pd.DataFrame()
+df_ratings_country = pd.concat(ratings_data_country, ignore_index=True) if ratings_data_country else pd.DataFrame()
+df_ratings_overview = pd.concat(ratings_data_overview, ignore_index=True) if ratings_data_overview else pd.DataFrame()
 
 # Datums schoonmaken
 df_sales.dropna(subset=["Transaction Date"], inplace=True)
@@ -215,48 +214,48 @@ update_sku_plot(None, None, None)
 # 4) DERDE VISUALISATIE: Ratings vs Crashes
 # =====================================================================
 df_crashes["Daily Crashes"] = df_crashes.get("Daily Crashes", np.nan).fillna(0)
-df_ratings["Daily Average Rating"] = df_ratings.get("Daily Average Rating", np.nan).fillna(
-    df_ratings["Daily Average Rating"].mean()
-)
+df_ratings_country["Daily Average Rating"] = df_ratings_country.get("Daily Average Rating", np.nan)
 
-ratings_crashes = df_crashes.merge(df_ratings, on="Date", how="outer").groupby("Date").agg({
-    "Daily Crashes": "sum",
+ratings_crashes = df_crashes.merge(df_ratings_country, on="Date", how="left").groupby("Date").agg({
+    "Daily Crashes": "first",
     "Daily Average Rating": "mean"
 }).reset_index()
 
+ratings_crashes["Rating_MA7"] = ratings_crashes["Daily Average Rating"].rolling(window=21, min_periods=1).mean()
+ratings_crashes["Crashes_MA7"] = ratings_crashes["Daily Crashes"].rolling(window=7, min_periods=1).mean()
 ratings_crashes_source = ColumnDataSource(ratings_crashes)
 
 p3 = figure(
     title="Ratings vs. Crashes",
     x_axis_label="Datum",
-    y_axis_label="Crashes",
+    y_axis_label="Crashes(MA7)",
     x_axis_type="datetime",
-    height=400, width=700,
+    height=800, width=1400,
     toolbar_location="right"
 )
 
 # Extra y-as voor ratings
 p3.extra_y_ranges = {"rating": Range1d(start=0, end=5)}
-p3.add_layout(LinearAxis(y_range_name="rating", axis_label="Gemiddelde Rating"), 'right')
+p3.add_layout(LinearAxis(y_range_name="rating", axis_label="Gemiddelde Rating(MA21)"), 'right')
 
 # Crashes op linker as
 p3.line(
     x="Date", 
-    y="Daily Crashes",
+    y="Crashes_MA7",
     source=ratings_crashes_source,
     color="red",
-    legend_label="Crashes"
+    legend_label="Crashes(MA7)"
 )
 
 # Ratings op rechter as
 p3.line(
     x="Date",
-    y="Daily Average Rating",
+    y="Rating_MA7",
     source=ratings_crashes_source,
     color="blue",
     line_width=2,
     y_range_name="rating",
-    legend_label="Gemiddelde Rating"
+    legend_label="Gemiddelde Rating(MA21)"
 )
 
 p3.legend.location = "top_right"
