@@ -122,6 +122,9 @@ p1 = figure(
 )
 
 # Bars for transactions
+line_renderer = None
+
+# Bars for transactions
 bars_p1 = p1.vbar(
     x="Month",
     top="Transaction Count",
@@ -133,20 +136,28 @@ bars_p1 = p1.vbar(
 )
 
 max_amount = sales_by_month["Amount (Merchant Currency)"].max()
+max_transactions = sales_by_month["Transaction Count"].max()
 p1.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount * 1.1)}
+p1.y_range = Range1d(start=0, end=max_transactions * 1.1)  # Adjust transaction axis
 p1.add_layout(LinearAxis(y_range_name="amount", axis_label="Total Turnover (€)"), 'right')
 
-# Trendline: add a single revenue line, ensuring it is on top of the bars
-line_renderer = p1.line(
-    x="Month",
-    y="Amount (Merchant Currency)",
-    source=source_sales_by_month,
-    color="firebrick",
-    line_width=3,
-    y_range_name="amount",
-    legend_label="Total Turnover"
-)
-p1.renderers.append(line_renderer)
+# Ensure red line is added last so it's always on top
+def add_trend_line():
+    global line_renderer
+    if line_renderer is not None and line_renderer in p1.renderers:
+        p1.renderers.remove(line_renderer)
+    line_renderer = p1.line(
+        x="Month",
+        y="Amount (Merchant Currency)",
+        source=source_sales_by_month,
+        color="firebrick",
+        line_width=3,
+        y_range_name="amount",
+        legend_label="Total Turnover"
+    )
+    p1.renderers.append(line_renderer)
+
+add_trend_line()
 
 hover = HoverTool(tooltips=[
     ("Month", "@Month"),
@@ -159,6 +170,46 @@ p1.legend.location = "top_left"
 p1.legend.click_policy = "hide"
 p1.xaxis.major_label_orientation = 0.8
 p1.ygrid.grid_line_color = None
+
+# Ensure select_overview is defined before calling on_change
+select_overview = Select(title="Month Filter", value="All Months", options=["All Months"] + sorted(x_range_values))
+
+def update_overview(attr, old, new):
+    selected_overview = select_overview.value
+    if selected_overview == "All Months":
+        p1.x_range.factors = x_range_values
+        source_sales_by_month.data = sales_by_month.to_dict(orient="list")
+        p1.title.text = "Sales Volume Over Time (All Months)"
+        p1.y_range.end = max_transactions * 1.1  # Reset transaction axis
+        p1.extra_y_ranges["amount"].end = max_amount * 1.1  # Reset turnover axis
+    else:
+        df_month = df_sales[df_sales["Month"] == selected_overview].copy()
+        if not df_month.empty:
+            df_month["Day"] = df_month["Transaction Date"].dt.strftime("%Y-%m-%d")
+            sales_by_day = df_month.groupby("Day").agg({
+                "Amount (Merchant Currency)": "sum",
+                "Transaction Date": "count"
+            }).rename(columns={"Transaction Date": "Transaction Count"}).reset_index()
+            sales_by_day.rename(columns={"Day": "Month"}, inplace=True)
+            day_list = sales_by_day["Month"].tolist()
+            p1.x_range.factors = day_list
+            source_sales_by_month.data = sales_by_day.to_dict(orient="list")
+            p1.title.text = f"Sales Volume Over Time ({selected_overview})"
+            max_day_amount = sales_by_day["Amount (Merchant Currency)"].max()
+            max_day_transactions = sales_by_day["Transaction Count"].max()
+            p1.y_range.end = max_day_transactions * 0.01  # Adjust transaction axis dynamically
+            p1.extra_y_ranges["amount"].end = max_day_amount * 0.01  # Adjust turnover axis dynamically
+        else:
+            p1.x_range.factors = []
+            source_sales_by_month.data = {}
+            p1.title.text = f"Sales Volume Over Time ({selected_overview})"
+            p1.y_range.end = max_transactions * 1.1  # Reset if no data
+            p1.extra_y_ranges["amount"].end = max_amount * 1.1
+    
+    add_trend_line()  # Ensure red line is always on top
+
+select_overview.on_change("value", update_overview)
+update_overview(None, None, None)
 
 # =====================================================================
 # 3) SECOND VISUALIZATION: Sales per SKU (p2)
