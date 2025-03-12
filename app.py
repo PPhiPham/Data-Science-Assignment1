@@ -166,73 +166,53 @@ p1.ygrid.grid_line_color = None
 # =====================================================================
 unique_skus = df_sales["Sku Id"].dropna().unique().tolist()
 unique_skus.sort()
-
+ 
+ # Aggregatie per SKU en per maand
 sku_sales_df = df_sales.groupby(["Sku Id", "Month"]).agg({
-    "Amount (Merchant Currency)": "sum",
-    "Transaction Date": "count"
-}).rename(columns={"Transaction Date": "Transaction Count"}).reset_index()
-
+     "Amount (Merchant Currency)": "sum",
+     "Transaction Date": "count"
+ }).rename(columns={"Transaction Date": "Transaction Count"}).reset_index()
+ 
 source_sku_filtered = ColumnDataSource(data=dict(Month=[], amount=[], count=[]))
-
+ 
 p2 = figure(
-    title="Sales per SKU (per Month)",
-    x_range=x_range_values,
-    height=450, width=800,
-    x_axis_label="Month", 
-    y_axis_label="Total Revenue (€)",
-    toolbar_location="right"
-)
-
-# --- Sla de vbar op in bars_p2, zodat we de kleur kunnen wijzigen als er maar 1 factor is
-bars_p2 = p2.vbar(
-    x="Month",
-    top="amount",
-    source=source_sku_filtered,
-    width=0.5,
-    fill_color=factor_cmap('Month', palette=Viridis256, factors=x_range_values),
-    line_color="black",
-    legend_label="Transactions"
-)
-
-max_amount_sku = sku_sales_df["Amount (Merchant Currency)"].max() if not sku_sales_df.empty else 1
-p2.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount_sku * 1.1)}
-p2.add_layout(LinearAxis(y_range_name="amount", axis_label="Totale Omzet (€)"), 'right')
-
-p2.line(
-    x="Month",
-    y="amount",
-    source=source_sku_filtered,
-    color="firebrick",
-    line_width=3,
-    y_range_name="amount",
-    legend_label="Totale Omzet"
-)
-
-p2.legend.location = "top_left"
-p2.legend.click_policy = "hide"
-p2.xaxis.major_label_orientation = 0.8
-p2.ygrid.grid_line_color = None
-
-hover_sku = HoverTool(tooltips=[
-    ("Maand", "@Month"),
-    ("Omzet (€)", "@amount{0.00}"),
-    ("Aantal Transacties", "@count")
-])
-p2.add_tools(hover_sku)
-
+     title="Verkoop per SKU (per Maand)",
+     x_range=x_range_values,
+     height=400, width=700,
+     x_axis_label="Maand", 
+     y_axis_label="Totale Omzet",
+     toolbar_location="right"
+ )
+ 
+bars_sku = p2.vbar(
+     x="Month",
+     top="amount",
+     width=0.5,
+     source=source_sku_filtered,
+     color="green"
+ )
+ 
+ # Callback-functie om data te updaten
 def update_sku_plot(attr, old, new):
-    selected_sku = select_sku.value
-    df_filtered = sku_sales_df[sku_sales_df["Sku Id"] == selected_sku].copy()
-    df_filtered = df_filtered.set_index("Month").reindex(x_range_values, fill_value=0).reset_index()
-    df_filtered.rename(columns={"index": "Month"}, inplace=True)
-    source_sku_filtered.data = dict(
-        Month=df_filtered["Month"],
-        amount=df_filtered["Amount (Merchant Currency)"],
-        count=df_filtered["Transaction Count"]
-    )
-
+     selected_sku = select_sku.value
+     df_filtered = sku_sales_df[sku_sales_df["Sku Id"] == selected_sku].copy()
+ 
+     # Re-indexen voor alle maanden (ook als er geen data is in een bepaalde maand)
+     df_filtered = df_filtered.set_index("Month").reindex(x_range_values, fill_value=0).reset_index()
+     df_filtered.rename(columns={"index": "Month"}, inplace=True)
+ 
+     source_sku_filtered.data = dict(
+         Month=df_filtered["Month"],
+         amount=df_filtered["Amount (Merchant Currency)"],
+         count=df_filtered["Transaction Count"]
+     )
+ 
+ # Select-widget
+from bokeh.models import Select
 select_sku = Select(title="SKU filter", value=unique_skus[0], options=unique_skus)
 select_sku.on_change("value", update_sku_plot)
+ 
+ # Initieel aanroepen
 update_sku_plot(None, None, None)
 
 # =====================================================================
