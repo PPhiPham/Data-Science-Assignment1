@@ -9,7 +9,7 @@ import chardet
 from bokeh.io import curdoc
 from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
-                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel)
+                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, Select, LinearColorMapper, Dropdown)
 from bokeh.layouts import row, column
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Plasma256
@@ -203,7 +203,6 @@ def update_sku_plot(attr, old, new):
     )
 
 # Select-widget
-from bokeh.models import Select
 select_sku = Select(title="SKU filter", value=unique_skus[0], options=unique_skus)
 select_sku.on_change("value", update_sku_plot)
 
@@ -266,56 +265,72 @@ p3.legend.location = "top_right"
 # Pas het pad aan naar jouw shapefile
 shapefile_path = os.path.join(os.getcwd(), "worldmap", "ne_110m_admin_0_countries.shp")
 world = gpd.read_file(shapefile_path)
+world = world.to_crs("EPSG:4326")
 
 # Verkoop per land
 country_sales = df_sales.groupby("Buyer Country").agg({"Amount (Merchant Currency)": "sum"}).reset_index()
-world = world.merge(country_sales, how="left", left_on="ISO_A2", right_on="Buyer Country")
-world["Amount (Merchant Currency)"] = world["Amount (Merchant Currency)"].fillna(0)
+world_sales = world.merge(country_sales, how="left", left_on="ISO_A2", right_on="Buyer Country")
+world_sales["Amount (Merchant Currency)"] = world_sales["Amount (Merchant Currency)"].fillna(0)
 
 # Converteer naar GeoJSON
-world = world.to_crs("EPSG:4326")  # Zorg dat het WGS84 is
-geo_source = GeoJSONDataSource(geojson=world.to_json())
+geo_source_sales = GeoJSONDataSource(geojson=world_sales.to_json())
 
-max_sales = world["Amount (Merchant Currency)"].max()
-color_mapper = linear_cmap(
-    field_name="Amount (Merchant Currency)",
-    palette=Plasma256,
-    low=0, 
-    high=max_sales
-)
+# Zorgen dat één outlier niet alle kleur weghaalt
+low_val = 1  
+high_val = world_sales["Amount (Merchant Currency)"].max()
+sales_color_mapper = LogColorMapper(palette=Plasma256, low=low_val, high=high_val)
 
-p4 = figure(
-    title="Geografische Verdeling van Sales",
-    match_aspect=True,
-    x_axis_type="mercator", 
-    y_axis_type="mercator",
-    height=400, width=700,
-    toolbar_location="right"
-)
+last_idx = df_ratings_country.groupby("Country")["Date"].idxmax()
+country_ratings_latest = df_ratings_country.loc[last_idx, ["Country", "Total Average Rating"]].reset_index(drop=True)
+world_ratings = world.merge(country_ratings_latest, how="left", left_on="ISO_A2", right_on="Country")
+world_ratings["Total Average Rating"] = world_ratings["Total Average Rating"].fillna(0)
+
+geo_source_ratings = GeoJSONDataSource(geojson=world_ratings.to_json())
+
+rating_color_mapper = LinearColorMapper(palette=Plasma256, low=0, high=5)
+p4 = figure(title="Geografische Verdeling van Sales",
+               x_axis_type="mercator", y_axis_type="mercator",
+               match_aspect=True, height=800, width=1400,
+               toolbar_location="right")
+
 
 # Als je een tile-background wilt, uncomment deze regels:
 # from bokeh.tile_providers import get_provider, CARTODBPOSITRON
 # p4.add_tile(get_provider(CARTODBPOSITRON))
 
-r = p4.patches(
-    xs="xs",
-    ys="ys",
-    source=geo_source,
-    fill_color=color_mapper,
-    fill_alpha=0.7,
-    line_color="gray",
-    line_width=0.5
-)
+sales_patches = p4.patches(xs="xs", ys="ys", source=geo_source_sales,
+                              fill_color={'field': 'Amount (Merchant Currency)', 'transform': sales_color_mapper},
+                              fill_alpha=0.7, line_color="gray", line_width=0.5)
+
+ratings_patches = p4.patches(xs="xs", ys="ys", source=geo_source_ratings,
+                                fill_color={'field': 'Total Average Rating', 'transform': rating_color_mapper},
+                                fill_alpha=0.7, line_color="gray", line_width=0.5)
+ratings_patches.visible = False
 
 # Hovertool
-hovertool = HoverTool(
-    renderers=[r],
-    tooltips=[
-        ("Land", "@ADMIN"),  # ADMIN komt uit shapefile
-        ("Sales (€)", "@{Amount (Merchant Currency)}{0.00}")
-    ]
-)
-p4.add_tools(hovertool)
+hover = HoverTool(renderers=[sales_patches, ratings_patches],
+                  tooltips=[("Country", "@ADMIN"),
+                            ("Volume (€)", "@{Amount (Merchant Currency)}{0.00}")])
+p4.add_tools(hover)
+
+select_map = Select(title="Map Type", value="Sales Volume", options=["Sales Volume", "Total Average Rating"])
+
+def update_world_map(attr, old, new):
+    if select_map.value == "Sales Volume":
+        sales_patches.visible = True
+        ratings_patches.visible = False
+        p4.title.text = "Geografische Verdeling van Sales"
+        hover.tooltips = [("Country", "@ADMIN"),
+                          ("Sales (€)", "@{Amount (Merchant Currency)}{0.00}")]
+    else:
+        sales_patches.visible = False
+        ratings_patches.visible = True
+        p4.title.text = "Geografische Verdeling van Total Average Rating"
+        hover.tooltips = [("Country", "@ADMIN"),
+                          ("Rating", "@{Total Average Rating}{0.00}")]
+
+select_map.on_change("value", update_world_map)
+update_world_map(None, None, None)
 
 # =====================================================================
 # 6) LAYOUT (Tabs)
@@ -324,7 +339,7 @@ p4.add_tools(hovertool)
 tab1 = TabPanel(child=p1, title="Sales Over Tijd")
 tab2 = TabPanel(child=column(select_sku, p2), title="Sales per SKU")
 tab3 = TabPanel(child=p3, title="Ratings vs Crashes")
-tab4 = TabPanel(child=p4, title="Wereldkaart")
+tab4 = TabPanel(child=column(select_map, p4), title="Wereldkaart")
 
 tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
 
