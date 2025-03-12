@@ -9,10 +9,10 @@ import chardet
 from bokeh.io import curdoc
 from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
-                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel)
+                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, Legend, LegendItem, FactorRange)
 from bokeh.layouts import row, column
-from bokeh.transform import linear_cmap
-from bokeh.palettes import Plasma256
+from bokeh.transform import linear_cmap, factor_cmap
+from bokeh.palettes import Plasma256, Viridis256, Category20
 
 # =====================================================================
 # 1) DATA INLADEN
@@ -121,21 +121,22 @@ source_sales_by_month = ColumnDataSource(sales_by_month)
 x_range_values = sales_by_month["Month"].tolist()
 
 p1 = figure(
-    title="Sales Volume Over Tijd",
+    title="📈 Sales Volume Over Tijd",
     x_range=x_range_values,
-    height=400, width=700,
+    height=500, width=1000,
     x_axis_label="Maand", 
     y_axis_label="Aantal Transacties",
     toolbar_location="right"
 )
 
-# Staven voor aantal transacties
+# Staafdiagram met verbeterde kleuren en gradient
 p1.vbar(
     x="Month",
     top="Transaction Count",
     source=source_sales_by_month,
     width=0.5,
-    color="steelblue",
+    fill_color=factor_cmap('Month', palette=Viridis256, factors=x_range_values),
+    line_color="black",
     legend_label="Aantal Transacties"
 )
 
@@ -144,18 +145,30 @@ max_amount = sales_by_month["Amount (Merchant Currency)"].max()
 p1.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount * 1.1)}
 p1.add_layout(LinearAxis(y_range_name="amount", axis_label="Totale Omzet (€)"), 'right')
 
-# Lijn voor omzet
+# Lijn voor omzet met verbeterde opmaak
 p1.line(
     x="Month",
     y="Amount (Merchant Currency)",
     source=source_sales_by_month,
     color="firebrick",
-    line_width=2,
+    line_width=3,
     y_range_name="amount",
     legend_label="Totale Omzet"
 )
 
+# Hover effect met percentage verandering
+hover = HoverTool(tooltips=[
+    ("Maand", "@Month"),
+    ("Aantal Transacties", "@{Transaction Count}"),
+    ("Totale Omzet (€)", "@{Amount (Merchant Currency)}{0.00}"),
+])
+p1.add_tools(hover)
+
+# Layout verbeteringen
 p1.legend.location = "top_left"
+p1.legend.click_policy = "hide"  # Klik om datasets te verbergen
+p1.xaxis.major_label_orientation = 0.8  # X-as labels schuiner voor betere leesbaarheid
+p1.ygrid.grid_line_color = None  # Verwijder gridlines voor een cleaner uiterlijk
 
 # =====================================================================
 # 3) TWEEDE VISUALISATIE: Sales per SKU + Widget
@@ -172,28 +185,60 @@ sku_sales_df = df_sales.groupby(["Sku Id", "Month"]).agg({
 source_sku_filtered = ColumnDataSource(data=dict(Month=[], amount=[], count=[]))
 
 p2 = figure(
-    title="Verkoop per SKU (per Maand)",
+    title="🛒 Verkoop per SKU (per Maand)",
     x_range=x_range_values,
-    height=400, width=700,
+    height=450, width=800,
     x_axis_label="Maand", 
-    y_axis_label="Totale Omzet",
+    y_axis_label="Totale Omzet (€)",
     toolbar_location="right"
 )
 
-bars_sku = p2.vbar(
+# Gradient kleur op basis van omzet
+p2.vbar(
     x="Month",
     top="amount",
-    width=0.5,
     source=source_sku_filtered,
-    color="green"
+    width=0.5,
+    fill_color=factor_cmap('Month', palette=Viridis256, factors=x_range_values),
+    line_color="black",
+    legend_label="Aantal Transacties"
 )
 
-# Callback-functie om data te updaten
+# ✅ Tweede y-as voor omzet (zoals in p1)
+max_amount_sku = sku_sales_df["Amount (Merchant Currency)"].max() if not sku_sales_df.empty else 1
+p2.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount_sku * 1.1)}
+p2.add_layout(LinearAxis(y_range_name="amount", axis_label="Totale Omzet (€)"), 'right')
+
+# ✅ Lijn voor omzet net als in p1
+p2.line(
+    x="Month",
+    y="amount",
+    source=source_sku_filtered,
+    color="firebrick",
+    line_width=3,
+    y_range_name="amount",
+    legend_label="Totale Omzet"
+)
+
+# ✅ Layout verbeteringen zoals in p1
+p2.legend.location = "top_left"
+p2.legend.click_policy = "hide"
+p2.xaxis.major_label_orientation = 0.8  # Schuine labels voor betere leesbaarheid
+p2.ygrid.grid_line_color = None  # Verwijder gridlines voor een cleaner uiterlijk
+
+# Hover effect
+hover_sku = HoverTool(tooltips=[
+    ("Maand", "@Month"),
+    ("Omzet (€)", "@amount{0.00}"),
+    ("Aantal Transacties", "@count")
+])
+p2.add_tools(hover_sku)
+
+# Callback functie om data te updaten bij SKU selectie
 def update_sku_plot(attr, old, new):
     selected_sku = select_sku.value
     df_filtered = sku_sales_df[sku_sales_df["Sku Id"] == selected_sku].copy()
 
-    # Re-indexen voor alle maanden (ook als er geen data is in een bepaalde maand)
     df_filtered = df_filtered.set_index("Month").reindex(x_range_values, fill_value=0).reset_index()
     df_filtered.rename(columns={"index": "Month"}, inplace=True)
 
@@ -203,8 +248,7 @@ def update_sku_plot(attr, old, new):
         count=df_filtered["Transaction Count"]
     )
 
-# Select-widget
-from bokeh.models import Select
+# SKU Select dropdown
 select_sku = Select(title="SKU filter", value=unique_skus[0], options=unique_skus)
 select_sku.on_change("value", update_sku_plot)
 
