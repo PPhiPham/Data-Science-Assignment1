@@ -264,7 +264,6 @@ def update_sku_plot(attr, old, new):
 select_sku.on_change("value", update_sku_plot)
 update_sku_plot(None, None, None)
 
-# Add a hover tool for p2's bars
 hover_sku = HoverTool(tooltips=[
     ("Month", "@Month"),
     ("Turnover (€)", "@amount{0.00}"),
@@ -300,7 +299,6 @@ def update_overview(attr, old, new):
         else:
             bars_p2.glyph.fill_color = factor_cmap("Month", palette=Viridis256, factors=x_range_values)
         
-        # Add the overall revenue trendline if not present
         if line_renderer2 is None:
             line_renderer2 = p2.line(
                 x="Month",
@@ -311,7 +309,6 @@ def update_overview(attr, old, new):
                 legend_label="Total Turnover"
             )
             p2.renderers.append(line_renderer2)
-            # Add a hover tool for the trendline
             hover_line = HoverTool(renderers=[line_renderer2],
                                    tooltips=[("Month", "@Month"),
                                              ("Total Turnover (€)", "@{Amount (Merchant Currency)}{0.00}")])
@@ -358,7 +355,6 @@ def update_overview(attr, old, new):
         else:
             bars_p2.glyph.fill_color = factor_cmap("Month", palette=Viridis256, factors=sku_list_month)
         select_sku.visible = False
-        # Remove overall revenue trendline if present
         if line_renderer2 is not None:
             try:
                 p2.renderers.remove(line_renderer2)
@@ -423,7 +419,6 @@ p3.xaxis.major_label_orientation = 0.8
 p3.xgrid.grid_line_color = None
 p3.ygrid.grid_line_color = None
 
-# Add a hover tool to display details
 hover_tool = HoverTool(
     renderers=[crashes_line, rating_line],
     tooltips=[
@@ -537,7 +532,6 @@ p5.add_tools(hover_p5)
 unique_countries = ["All Countries"] + sorted(country_data["Country"].unique().tolist())
 select_country_p5 = Select(title="Country Filter", value="All Countries", options=unique_countries)
 
-# Function to filter p5 data based on selection
 def update_p5(attr, old, new):
     selected_country = select_country_p5.value
     if selected_country == "All Countries":
@@ -545,24 +539,18 @@ def update_p5(attr, old, new):
     else:
         filtered_data = country_data[country_data["Country"] == selected_country]
 
-    # Update the ColumnDataSource without modifying country_data
     source.data = {
         "Country": filtered_data["Country"].tolist(),
         "Transactions": filtered_data["Transactions"].tolist(),
         "Total Average Rating": filtered_data["Total Average Rating"].tolist(),
     }
 
-    # Update x-axis dynamically
     p5.x_range.factors = filtered_data["Country"].tolist()
 
-    # Adjust y-axis dynamically
     max_filtered_transactions = filtered_data["Transactions"].max() if not filtered_data.empty else 1
-    p5.y_range.end = max(max_filtered_transactions * 1.1, 10)  # Ensure it's never too low
+    p5.y_range.end = max(max_filtered_transactions * 1.1, 10)
 
-# Attach filter callback
 select_country_p5.on_change("value", update_p5)
-
-# Initialize the filter (set to "All Countries" by default)
 update_p5(None, None, None)
 
 
@@ -590,4 +578,3 @@ latest_ratings = df_ratings_country.loc[latest_idx].copy()
 result = latest_ratings.merge(transactions_per_country, on="Country", how="left")
 result = result.sort_values("Total Average Rating", ascending=True)
 #print(result[["Country", "Total Average Rating", "Transactions"]].head(0-50))
-
