@@ -20,7 +20,6 @@ from tornado.web import StaticFileHandler
 # =====================================================================
 data_path = os.path.join(os.getcwd(), "data")
 csv_files = glob.glob(os.path.join(data_path, "*.csv"))
-css_path = os.path.join(os.getcwd(), "custom_style.css")
 
 sales_data = []
 crash_data = []
@@ -116,7 +115,7 @@ x_range_values = sales_by_month["Month"].tolist()
 p1 = figure(
     title="Sales Volume Over Time (All Months)",
     x_range=x_range_values,
-    height=500, width=1000,
+    height=700, width=1400,
     x_axis_label="Month", 
     y_axis_label="Transactions",
     toolbar_location="right"
@@ -178,7 +177,7 @@ source_sku_filtered = ColumnDataSource(data=dict(Month=[], amount=[], count=[]))
 p2 = figure(
     title="Sales per SKU (per Month)",
     x_range=x_range_values,
-    height=450, width=800,
+    height=700, width=1400,
     x_axis_label="Month", 
     y_axis_label="Total Turnover (€)",
     toolbar_location="right"
@@ -335,7 +334,7 @@ p3 = figure(
     x_axis_label="Date",
     y_axis_label="Crashes (7-day MA)",
     x_axis_type="datetime",
-    height=800, width=1400,
+    height=700, width=1400,
     toolbar_location="right",
     background_fill_color="white"  # Clean background
 )
@@ -406,7 +405,7 @@ geo_source_ratings = GeoJSONDataSource(geojson=world_ratings.to_json())
 rating_color_mapper = LinearColorMapper(palette=Plasma256, low=0, high=5)
 p4 = figure(title="Geographical Distribution of Sales",
            x_axis_type="mercator", y_axis_type="mercator",
-           match_aspect=True, height=800, width=1400,
+           match_aspect=True, height=700, width=1400,
            toolbar_location="right")
 # Uncomment below for a tile background:
 # from bokeh.tile_providers import get_provider, CARTODBPOSITRON
@@ -442,11 +441,12 @@ update_world_map(None, None, None)
 # 7) LAYOUT (Tabs)
 # =====================================================================
 tab1 = TabPanel(child=column(select_overview, p1), title="Sales Over Time")
-tab2 = TabPanel(child=column(select_overview, select_sku, p2), title="Sales per SKU")
+tab2 = TabPanel(child=column(row(select_overview, select_sku), p2), title="Sales per SKU")
 tab3 = TabPanel(child=p3, title="Ratings vs. Crashes")
 tab4 = TabPanel(child=column(select_map, p4), title="World Map")
 tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
+
 curdoc().clear()
 curdoc().add_root(tabs)
-curdoc().theme = 'dark_minimal'
+curdoc().theme = 'light_minimal'
 curdoc().title = "Data Science Dashboard"
