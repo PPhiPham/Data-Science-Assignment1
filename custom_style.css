@@ -1,0 +1,26 @@
+body {
+    background: #1e1e2e;
+    font-family: 'Arial', sans-serif;
+    color: #ffffff;
+    margin: 0;
+    padding: 0;
+}
+.bk-root {
+    background: #2a2d3e;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0px 0px 15px rgba(255, 255, 255, 0.2);
+}
+.bk-tabs-header {
+    background: #1e1e2e;
+    color: #bb86fc;
+    font-weight: bold;
+}
+.bk-tab {
+    background: #282a36;
+    border-radius: 5px;
+}
+.bk-button {
+    background: #bb86fc;
+    color: #ffffff;
+}
