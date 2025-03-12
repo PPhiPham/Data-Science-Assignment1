@@ -11,7 +11,7 @@ from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
                           Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, LinearColorMapper, Dropdown)
 from bokeh.layouts import row, column
-from bokeh.transform import linear_cmap, factor_cmap
+from bokeh.transform import linear_cmap, factor_cmap, dodge
 from bokeh.palettes import Plasma256, Viridis256, Category20
 from tornado.web import StaticFileHandler
 
@@ -46,10 +46,10 @@ for file in csv_files:
         if "SKU ID" in df.columns:
             df.rename(columns={"SKU ID": "Sku Id"}, inplace=True)
         df["Transaction Type"] = df["Transaction Type"].replace({
-            "Charged": "Charge",
-            "Refund": "Google fee"
+            "Charged": "Charge"
         })
         df = df[df["Product id"] == "com.vansteinengroentjes.apps.ddfive"]
+        df = df[df["Transaction Type"] == "Charge"]
         if "Transaction Date" in df.columns:
             df["Transaction Date"] = pd.to_datetime(df["Transaction Date"], errors='coerce')
         sales_data.append(df)
@@ -326,7 +326,7 @@ ratings_crashes = df_crashes.merge(df_ratings_country, on="Date", how="left").gr
     "Daily Crashes": "first",
     "Daily Average Rating": "mean"
 }).reset_index()
-ratings_crashes["Rating_MA7"] = ratings_crashes["Daily Average Rating"].rolling(window=21, min_periods=1).mean()
+ratings_crashes["Rating_MA21"] = ratings_crashes["Daily Average Rating"].rolling(window=21, min_periods=1).mean()
 ratings_crashes["Crashes_MA7"] = ratings_crashes["Daily Crashes"].rolling(window=7, min_periods=1).mean()
 ratings_crashes_source = ColumnDataSource(ratings_crashes)
 p3 = figure(
@@ -336,7 +336,7 @@ p3 = figure(
     x_axis_type="datetime",
     height=700, width=1400,
     toolbar_location="right",
-    background_fill_color="white"  # Clean background
+    background_fill_color="white" 
 )
 
 # Add a secondary y-axis for Average Rating (21-day MA)
@@ -353,16 +353,17 @@ crashes_line = p3.line(
     legend_label="Crashes (7-day MA)"
 )
 
-# Draw the Average Rating line in purple (dashed)
+# Draw the Average Rating line in black (dashed)
 rating_line = p3.line(
     x="Date",
-    y="Rating_MA7",
+    y="Rating_MA21",
     source=ratings_crashes_source,
-    color="purple",
+    color="black",
     line_width=3,
     line_dash="dashed",
     y_range_name="rating",
-    legend_label="Average Rating (21-day MA)"
+    legend_label="Average Rating (21-day MA)",
+    line_alpha= 0.75
 )
 
 p3.legend.location = "top_left"
@@ -407,9 +408,10 @@ p4 = figure(title="Geographical Distribution of Sales",
            x_axis_type="mercator", y_axis_type="mercator",
            match_aspect=True, height=700, width=1400,
            toolbar_location="right")
-# Uncomment below for a tile background:
-# from bokeh.tile_providers import get_provider, CARTODBPOSITRON
-# p4.add_tile(get_provider(CARTODBPOSITRON))
+
+p4.xaxis.visible = False
+p4.yaxis.visible = False
+
 sales_patches = p4.patches(xs="xs", ys="ys", source=geo_source_sales,
                           fill_color={'field': 'Amount (Merchant Currency)', 'transform': sales_color_mapper},
                           fill_alpha=0.7, line_color="gray", line_width=0.5)
@@ -438,15 +440,63 @@ def update_world_map(attr, old, new):
 select_map.on_change("value", update_world_map)
 update_world_map(None, None, None)
 # =====================================================================
-# 7) LAYOUT (Tabs)
+# 7) FIFTH VISUALIZATION: Transactions and Total Average Rating by Country (except the US)
+# =====================================================================
+transactions_per_country = df_sales.groupby("Buyer Country").size().reset_index(name="Transactions")
+transactions_per_country.rename(columns={"Buyer Country": "Country"}, inplace=True)
+
+ratings_per_country = df_ratings_country.groupby("Country").agg({"Total Average Rating": "last"}).reset_index()
+country_data = pd.merge(transactions_per_country, ratings_per_country, on="Country", how="outer")
+
+country_data["Transactions"] = country_data["Transactions"].fillna(0)
+country_data["Total Average Rating"] = country_data["Total Average Rating"].fillna(0)
+country_data = country_data[(country_data["Transactions"] > 0) & (country_data["Country"] != "US")]
+country_data = country_data.sort_values(by="Transactions", ascending=False)
+countries = list(country_data["Country"])
+source = ColumnDataSource(country_data)
+
+max_transactions = country_data["Transactions"].max()
+
+p5 = figure(x_range=countries, title="Transactions and Total Average Rating by \"emerging\" Countries (except the US)",
+            height=600, width=1200, toolbar_location="right",
+            x_axis_label="Country",  y_range=Range1d(start=0, end=max_transactions * 1.1))
+
+p5.vbar(x=dodge('Country', -0.15, range=p5.x_range), top='Transactions', width=0.3,
+        source=source, color="purple", legend_label="Transactions")
+
+p5.extra_y_ranges = {"rating": Range1d(start=0, end=5)}
+p5.add_layout(LinearAxis(y_range_name="rating", axis_label="Total Average Rating"), 'right')
+
+p5.vbar(x=dodge('Country', 0.15, range=p5.x_range), bottom=0, top='Total Average Rating', width=0.3,
+        source=source, color="purple", y_range_name="rating", legend_label="Total Average Rating", fill_alpha=0.25)
+
+p5.xgrid.grid_line_color = None
+p5.legend.location = "top_left"
+p5.legend.orientation = "horizontal"
+
+
+# =====================================================================
+# 8) LAYOUT (Tabs)
 # =====================================================================
 tab1 = TabPanel(child=column(select_overview, p1), title="Sales Over Time")
 tab2 = TabPanel(child=column(row(select_overview, select_sku), p2), title="Sales per SKU")
 tab3 = TabPanel(child=p3, title="Ratings vs. Crashes")
 tab4 = TabPanel(child=column(select_map, p4), title="World Map")
-tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
+tab5 = TabPanel(child=p5, title="View per country")
+tabs = Tabs(tabs=[tab1, tab2, tab3, tab4, tab5])
 
 curdoc().clear()
 curdoc().add_root(tabs)
 curdoc().theme = 'light_minimal'
 curdoc().title = "Data Science Dashboard"
+
+# =====================================================================
+# 9) Queries
+# =====================================================================
+#query that shows the countries with the lowest Total average rating with their respective number of transactions
+latest_idx = df_ratings_country.groupby("Country")["Date"].idxmax()
+latest_ratings = df_ratings_country.loc[latest_idx].copy()
+result = latest_ratings.merge(transactions_per_country, on="Country", how="left")
+result = result.sort_values("Total Average Rating", ascending=True)
+#print(result[["Country", "Total Average Rating", "Transactions"]].head(0-50))
+
