@@ -9,7 +9,7 @@ import chardet
 from bokeh.io import curdoc
 from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
-                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, LinearColorMapper, Dropdown)
+                          Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, LinearColorMapper, Dropdown, MultiSelect)
 from bokeh.layouts import row, column
 from bokeh.transform import linear_cmap, factor_cmap, dodge
 from bokeh.palettes import Plasma256, Viridis256, Category20
@@ -525,6 +525,46 @@ p5.xgrid.grid_line_color = None
 p5.legend.location = "top_left"
 p5.legend.orientation = "horizontal"
 
+hover_p5 = HoverTool(
+    tooltips=[
+        ("Country", "@Country"),
+        ("Transactions", "@Transactions{0,0}"),
+        ("Avg. Rating", "@{Total Average Rating}{0.00}")
+    ]
+)
+p5.add_tools(hover_p5)
+
+unique_countries = ["All Countries"] + sorted(country_data["Country"].unique().tolist())
+select_country_p5 = Select(title="Country Filter", value="All Countries", options=unique_countries)
+
+# Function to filter p5 data based on selection
+def update_p5(attr, old, new):
+    selected_country = select_country_p5.value
+    if selected_country == "All Countries":
+        filtered_data = country_data
+    else:
+        filtered_data = country_data[country_data["Country"] == selected_country]
+
+    # Update the ColumnDataSource without modifying country_data
+    source.data = {
+        "Country": filtered_data["Country"].tolist(),
+        "Transactions": filtered_data["Transactions"].tolist(),
+        "Total Average Rating": filtered_data["Total Average Rating"].tolist(),
+    }
+
+    # Update x-axis dynamically
+    p5.x_range.factors = filtered_data["Country"].tolist()
+
+    # Adjust y-axis dynamically
+    max_filtered_transactions = filtered_data["Transactions"].max() if not filtered_data.empty else 1
+    p5.y_range.end = max(max_filtered_transactions * 1.1, 10)  # Ensure it's never too low
+
+# Attach filter callback
+select_country_p5.on_change("value", update_p5)
+
+# Initialize the filter (set to "All Countries" by default)
+update_p5(None, None, None)
+
 
 # =====================================================================
 # 8) LAYOUT (Tabs)
@@ -533,7 +573,7 @@ tab1 = TabPanel(child=column(select_overview, p1), title="Sales Over Time")
 tab2 = TabPanel(child=column(row(select_overview, select_sku), p2), title="Sales per SKU")
 tab3 = TabPanel(child=p3, title="Ratings vs. Crashes")
 tab4 = TabPanel(child=column(select_map, p4), title="World Map")
-tab5 = TabPanel(child=p5, title="View per country")
+tab5 = TabPanel(child=column(select_country_p5, p5), title="View per country")
 tabs = Tabs(tabs=[tab1, tab2, tab3, tab4, tab5])
 
 curdoc().clear()
