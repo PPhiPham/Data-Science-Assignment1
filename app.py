@@ -130,12 +130,12 @@ bars_p1 = p1.vbar(
     width=0.5,
     fill_color=factor_cmap('Month', palette=Viridis256, factors=x_range_values),
     line_color="black",
-    legend_label="Aantal Transacties"
+    legend_label="Transactions"
 )
 
 max_amount = sales_by_month["Amount (Merchant Currency)"].max()
 p1.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount * 1.1)}
-p1.add_layout(LinearAxis(y_range_name="amount", axis_label="Totale Omzet (€)"), 'right')
+p1.add_layout(LinearAxis(y_range_name="amount", axis_label="Total Turnover (€)"), 'right')
 
 # --- Verwijder de dubbele line() aanroep en houd er slechts één
 line_renderer = p1.line(
@@ -145,7 +145,7 @@ line_renderer = p1.line(
     color="firebrick",
     line_width=3,
     y_range_name="amount",
-    legend_label="Totale Omzet"
+    legend_label="Total Turnover"
 )
 p1.renderers.append(line_renderer)  # Zodat de lijn bovenop de bars komt
 
@@ -176,11 +176,11 @@ sku_sales_df = df_sales.groupby(["Sku Id", "Month"]).agg({
 source_sku_filtered = ColumnDataSource(data=dict(Month=[], amount=[], count=[]))
  
 p2 = figure(
-     title="Verkoop per SKU (per Maand)",
+     title="Sales per SKU (per Month)",
      x_range=x_range_values,
      height=400, width=700,
-     x_axis_label="Maand", 
-     y_axis_label="Totale Omzet",
+     x_axis_label="Month", 
+     y_axis_label="Total Turnover",
      toolbar_location="right"
  )
  
@@ -287,7 +287,7 @@ def update_overview(attr, old, new):
             "amount": df_month_sku["Amount (Merchant Currency)"].tolist(),
             "count": df_month_sku["Transaction Count"].tolist()
         }
-        p2.title.text = f"🛒 Verkoop per SKU ({selected_overview})"
+        p2.title.text = f"Sales per SKU ({selected_overview})"
 
         # Als er maar 1 SKU is, fallback kleur
         if len(sku_list_month) == 1:
@@ -419,10 +419,10 @@ update_world_map(None, None, None)
 # =====================================================================
 # 7) LAYOUT (Tabs)
 # =====================================================================
-tab1 = TabPanel(child=column(select_overview, p1), title="Sales Over Tijd")
+tab1 = TabPanel(child=column(select_overview, p1), title="Sales Over Time")
 tab2 = TabPanel(child=column(select_overview, select_sku, p2), title="Sales per SKU")
 tab3 = TabPanel(child=p3, title="Ratings vs Crashes")
-tab4 = TabPanel(child=column(select_map, p4), title="Wereldkaart")
+tab4 = TabPanel(child=column(select_map, p4), title="Worldmap")
 
 tabs = Tabs(tabs=[tab1, tab2, tab3, tab4])
 curdoc().clear()
