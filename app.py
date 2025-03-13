@@ -14,6 +14,9 @@ from bokeh.layouts import row, column
 from bokeh.transform import factor_cmap, dodge
 from bokeh.palettes import Plasma256, Viridis256
 
+from bokeh.embed import file_html
+from bokeh.resources import CDN
+
 # =====================================================================
 # 1) DATA LOADING
 # =====================================================================
@@ -622,4 +625,9 @@ latest_idx = df_ratings_country.groupby("Country")["Date"].idxmax()
 latest_ratings = df_ratings_country.loc[latest_idx].copy()
 result = latest_ratings.merge(transactions_per_country, on="Country", how="left")
 result = result.sort_values("Total Average Rating", ascending=True) #False for descending
+# 'tabs' is your main layout (the Tabs object in your code)
+html = file_html(tabs, CDN, "Data Science Dashboard")
+
+with open("dashboard.html", "w") as f:
+    f.write(html)
 #print(result[["Country", "Total Average Rating", "Transactions"]].head(50))
