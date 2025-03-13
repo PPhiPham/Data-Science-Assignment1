@@ -424,7 +424,7 @@ hover_tool = HoverTool(
     tooltips=[
         ("Date", "@Date{%F}"),
         ("Crashes (7-day MA)", "@Crashes_MA7{0.0}"),
-        ("Average Rating (21-day MA)", "@Rating_MA7{0.0}")
+        ("Average Rating (21-day MA)", "@Rating_MA21{0.0}")
     ],
     formatters={"@Date": "datetime"}
 )
