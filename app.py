@@ -12,8 +12,7 @@ from bokeh.models import (ColumnDataSource, Range1d, LinearAxis,
                           Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, LinearColorMapper, Dropdown, MultiSelect)
 from bokeh.layouts import row, column
 from bokeh.transform import factor_cmap, dodge
-from bokeh.palettes import Plasma256, Viridis256, Category20
-from tornado.web import StaticFileHandler
+from bokeh.palettes import Plasma256, Viridis256
 
 # =====================================================================
 # 1) DATA LOADING
