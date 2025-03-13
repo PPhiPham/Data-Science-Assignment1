@@ -11,7 +11,7 @@ from bokeh.plotting import figure
 from bokeh.models import (ColumnDataSource, Range1d, LinearAxis, 
                           Select, HoverTool, GeoJSONDataSource, Tabs, TabPanel, LogColorMapper, LinearColorMapper, Dropdown, MultiSelect)
 from bokeh.layouts import row, column
-from bokeh.transform import linear_cmap, factor_cmap, dodge
+from bokeh.transform import factor_cmap, dodge
 from bokeh.palettes import Plasma256, Viridis256, Category20
 from tornado.web import StaticFileHandler
 
@@ -24,7 +24,6 @@ csv_files = glob.glob(os.path.join(data_path, "*.csv"))
 sales_data = []
 crash_data = []
 ratings_data_country = []
-ratings_data_overview = []
 
 for file in csv_files:
     with open(file, "rb") as f:
@@ -65,13 +64,8 @@ for file in csv_files:
         if "Date" in df.columns:
             df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
         ratings_data_country.append(df)
-    
-    # Identify Rating_overview data
-    elif "Daily Average Rating" in df.columns and "Country" not in df.columns:
-        if "Date" in df.columns:
-            df["Date"] = pd.to_datetime(df["Date"], errors='coerce')
-        ratings_data_overview.append(df)
-    
+
+# Operations to make the two aberrant sales files be included      
 conversion_rate_list = []
 for df in sales_data:
     if "Currency Conversion Rate" in df.columns:
@@ -92,18 +86,17 @@ for idx, df in enumerate(sales_data):
         df["Currency Conversion Rate"] = pd.to_numeric(df["Currency Conversion Rate"], errors='coerce')
         df["Amount (Merchant Currency)"] = df["Charged Amount"] * df["Currency Conversion Rate"]
         sales_data[idx] = df
-   
+
+# Put every type of data into their respective dataframe
 df_sales = pd.concat(sales_data, ignore_index=True) if sales_data else pd.DataFrame()
 df_crashes = pd.concat(crash_data, ignore_index=True) if crash_data else pd.DataFrame()
 df_ratings_country = pd.concat(ratings_data_country, ignore_index=True) if ratings_data_country else pd.DataFrame()
-df_ratings_overview = pd.concat(ratings_data_overview, ignore_index=True) if ratings_data_overview else pd.DataFrame()
-
-df_sales.dropna(subset=["Transaction Date"], inplace=True)
 df_sales["Month"] = df_sales["Transaction Date"].dt.to_period("M").astype(str)
 
 # =====================================================================
 # 2) FIRST VISUALIZATION: Sales Volume Over Time (p1)
 # =====================================================================
+# Fetch data for this visualization
 sales_by_month = df_sales.groupby("Month").agg({
     "Amount (Merchant Currency)": "sum",
     "Transaction Date": "count"
@@ -112,6 +105,8 @@ sales_by_month = df_sales.groupby("Month").agg({
 source_sales_by_month = ColumnDataSource(sales_by_month)
 x_range_values = sales_by_month["Month"].tolist()
 
+
+# Visualization 1 styling
 p1 = figure(
     title="Sales Volume Over Time (All Months)",
     x_range=x_range_values,
@@ -121,7 +116,6 @@ p1 = figure(
     toolbar_location="right"
 )
 
-# Bars for transactions
 line_renderer = None
 
 # Bars for transactions
@@ -138,10 +132,10 @@ bars_p1 = p1.vbar(
 max_amount = sales_by_month["Amount (Merchant Currency)"].max()
 max_transactions = sales_by_month["Transaction Count"].max()
 p1.extra_y_ranges = {"amount": Range1d(start=0, end=max_amount * 1.1)}
-p1.y_range = Range1d(start=0, end=max_transactions * 1.1)  # Adjust transaction axis
+p1.y_range = Range1d(start=0, end=max_transactions * 1.1)  # Adjust the transaction axis
 p1.add_layout(LinearAxis(y_range_name="amount", axis_label="Total Turnover (€)"), 'right')
 
-# Ensure red line is added last so it's always on top
+# Ensure red line is added last so it's always on top (visible)
 def add_trend_line():
     global line_renderer
     if line_renderer is not None and line_renderer in p1.renderers:
@@ -180,8 +174,8 @@ def update_overview(attr, old, new):
         p1.x_range.factors = x_range_values
         source_sales_by_month.data = sales_by_month.to_dict(orient="list")
         p1.title.text = "Sales Volume Over Time (All Months)"
-        p1.y_range.end = max_transactions * 1.1  # Reset transaction axis
-        p1.extra_y_ranges["amount"].end = max_amount * 1.1  # Reset turnover axis
+        p1.y_range.end = max_transactions * 1.1  # Reset the transaction axis
+        p1.extra_y_ranges["amount"].end = max_amount * 1.1  # Reset the turnover axis
     else:
         df_month = df_sales[df_sales["Month"] == selected_overview].copy()
         if not df_month.empty:
@@ -197,16 +191,16 @@ def update_overview(attr, old, new):
             p1.title.text = f"Sales Volume Over Time ({selected_overview})"
             max_day_amount = sales_by_day["Amount (Merchant Currency)"].max()
             max_day_transactions = sales_by_day["Transaction Count"].max()
-            p1.y_range.end = max_day_transactions * 0.01  # Adjust transaction axis dynamically
-            p1.extra_y_ranges["amount"].end = max_day_amount * 0.01  # Adjust turnover axis dynamically
+            p1.y_range.end = max_day_transactions * 0.01  # Adjust the transaction axis dynamically
+            p1.extra_y_ranges["amount"].end = max_day_amount * 0.01  # Adjust the turnover axis dynamically
         else:
             p1.x_range.factors = []
             source_sales_by_month.data = {}
             p1.title.text = f"Sales Volume Over Time ({selected_overview})"
-            p1.y_range.end = max_transactions * 1.1  # Reset if no data
+            p1.y_range.end = max_transactions * 1.1  # Reset if there is no data
             p1.extra_y_ranges["amount"].end = max_amount * 1.1
     
-    add_trend_line()  # Ensure red line is always on top
+    add_trend_line()  # Ensure the red line is always on top
 
 select_overview.on_change("value", update_overview)
 update_overview(None, None, None)
@@ -214,6 +208,7 @@ update_overview(None, None, None)
 # =====================================================================
 # 3) SECOND VISUALIZATION: Sales per SKU (p2)
 # =====================================================================
+# Fetch data for second visualization 
 unique_skus = df_sales["Sku Id"].dropna().unique().tolist()
 unique_skus.sort()
 
@@ -224,7 +219,7 @@ sku_sales_df = df_sales.groupby(["Sku Id", "Month"]).agg({
 
 source_sku_filtered = ColumnDataSource(data=dict(Month=[], amount=[], count=[]))
 
-# Create p2 with a single y-axis (for revenue)
+# Second visualization styling
 p2 = figure(
     title="Sales per SKU (per Month)",
     x_range=x_range_values,
@@ -367,15 +362,19 @@ select_overview.on_change("value", update_overview)
 # =====================================================================
 # 5) THIRD VISUALIZATION: Ratings vs. Crashes (p3)
 # =====================================================================
+# Fetch data for the third visualization
 df_crashes["Daily Crashes"] = df_crashes.get("Daily Crashes", np.nan).fillna(0)
 df_ratings_country["Daily Average Rating"] = df_ratings_country.get("Daily Average Rating", np.nan)
 ratings_crashes = df_crashes.merge(df_ratings_country, on="Date", how="left").groupby("Date").agg({
     "Daily Crashes": "first",
     "Daily Average Rating": "mean"
 }).reset_index()
+# Create moving averages for better readability
 ratings_crashes["Rating_MA21"] = ratings_crashes["Daily Average Rating"].rolling(window=21, min_periods=1).mean()
 ratings_crashes["Crashes_MA7"] = ratings_crashes["Daily Crashes"].rolling(window=7, min_periods=1).mean()
 ratings_crashes_source = ColumnDataSource(ratings_crashes)
+
+# Third visualization styling
 p3 = figure(
     title="Ratings vs. Crashes",
     x_axis_label="Date",
@@ -386,7 +385,7 @@ p3 = figure(
     background_fill_color="white" 
 )
 
-# Add a secondary y-axis for Average Rating (21-day MA)
+# Add a second y-axis for Average Rating (21-day MA)
 p3.extra_y_ranges = {"rating": Range1d(start=0, end=5)}
 p3.add_layout(LinearAxis(y_range_name="rating", axis_label="Average Rating (21-day MA)"), 'right')
 
@@ -433,6 +432,7 @@ p3.add_tools(hover_tool)
 # =====================================================================
 # 6) FOURTH VISUALIZATION: World Map (Sales per Country)
 # =====================================================================
+# Fetch data fourth visualization 
 shapefile_path = os.path.join(os.getcwd(), "worldmap", "ne_110m_admin_0_countries.shp")
 world = gpd.read_file(shapefile_path)
 world = world.to_crs("EPSG:4326")
@@ -440,6 +440,8 @@ country_sales = df_sales.groupby("Buyer Country").agg({"Amount (Merchant Currenc
 world_sales = world.merge(country_sales, how="left", left_on="ISO_A2", right_on="Buyer Country")
 world_sales["Amount (Merchant Currency)"] = world_sales["Amount (Merchant Currency)"].fillna(0)
 geo_source_sales = GeoJSONDataSource(geojson=world_sales.to_json())
+
+# Ensure that the colouring isnt favoured for the US to heavily
 low_val = 1  
 high_val = world_sales["Amount (Merchant Currency)"].max()
 sales_color_mapper = LogColorMapper(palette=Plasma256, low=low_val, high=high_val)
@@ -450,20 +452,41 @@ world_ratings = world.merge(country_ratings_latest, how="left", left_on="ISO_A2"
 world_ratings["Total Average Rating"] = world_ratings["Total Average Rating"].fillna(0)
 geo_source_ratings = GeoJSONDataSource(geojson=world_ratings.to_json())
 rating_color_mapper = LinearColorMapper(palette=Plasma256, low=0, high=5)
-p4 = figure(title="Geographical Distribution of Sales",
-           x_axis_type="mercator", y_axis_type="mercator",
-           match_aspect=True, height=700, width=1400,
-           toolbar_location="right")
+
+# Fourth visualization styling
+p4 = figure(
+    title="Geographical Distribution of Sales",
+    x_axis_type="mercator", 
+    y_axis_type="mercator",
+    match_aspect=True, 
+    height=700, 
+    width=1400,
+    toolbar_location="right"
+)
 
 p4.xaxis.visible = False
 p4.yaxis.visible = False
 
-sales_patches = p4.patches(xs="xs", ys="ys", source=geo_source_sales,
-                          fill_color={'field': 'Amount (Merchant Currency)', 'transform': sales_color_mapper},
-                          fill_alpha=0.7, line_color="gray", line_width=0.5)
-ratings_patches = p4.patches(xs="xs", ys="ys", source=geo_source_ratings,
-                            fill_color={'field': 'Total Average Rating', 'transform': rating_color_mapper},
-                            fill_alpha=0.7, line_color="gray", line_width=0.5)
+sales_patches = p4.patches(
+    xs="xs", 
+    ys="ys", 
+    source=geo_source_sales,
+    fill_color={'field': 'Amount (Merchant Currency)', 'transform': sales_color_mapper},
+    fill_alpha=0.7, 
+    line_color="gray", 
+    line_width=0.5
+)
+
+ratings_patches = p4.patches(
+    xs="xs", 
+    ys="ys", 
+    source=geo_source_ratings,
+    fill_color={'field': 'Total Average Rating', 'transform': rating_color_mapper},
+    fill_alpha=0.7, 
+    line_color="gray", 
+    line_width=0.5
+)
+
 ratings_patches.visible = False
 hovertool = HoverTool(renderers=[sales_patches, ratings_patches],
                   tooltips=[("Country", "@ADMIN"),
@@ -488,6 +511,7 @@ update_world_map(None, None, None)
 # =====================================================================
 # 7) FIFTH VISUALIZATION: Transactions and Total Average Rating by Country (except the US)
 # =====================================================================
+# Fetch data for the fifth visualization
 transactions_per_country = df_sales.groupby("Buyer Country").size().reset_index(name="Transactions")
 transactions_per_country.rename(columns={"Buyer Country": "Country"}, inplace=True)
 
@@ -503,18 +527,40 @@ source = ColumnDataSource(country_data)
 
 max_transactions = country_data["Transactions"].max()
 
-p5 = figure(x_range=countries, title="Transactions and Total Average Rating by \"emerging\" Countries (except the US)",
-            height=600, width=1200, toolbar_location="right",
-            x_axis_label="Country",  y_range=Range1d(start=0, end=max_transactions * 1.1))
+# Fifth visualization styling
+p5 = figure(
+    x_range=countries,
+    title="Transactions and Total Average Rating by \"emerging\" Countries (except the US)",
+    height=600,
+    width=1200,
+    toolbar_location="right",
+    x_axis_label="Country",
+    y_range=Range1d(start=0, end=max_transactions * 1.1)
+)
 
-p5.vbar(x=dodge('Country', -0.15, range=p5.x_range), top='Transactions', width=0.3,
-        source=source, color="purple", legend_label="Transactions")
+p5.vbar(
+    x=dodge('Country', -0.15, range=p5.x_range),
+    top='Transactions',
+    width=0.3,
+    source=source,
+    color="purple",
+    legend_label="Transactions"
+)
 
 p5.extra_y_ranges = {"rating": Range1d(start=0, end=5)}
 p5.add_layout(LinearAxis(y_range_name="rating", axis_label="Total Average Rating"), 'right')
 
-p5.vbar(x=dodge('Country', 0.15, range=p5.x_range), bottom=0, top='Total Average Rating', width=0.3,
-        source=source, color="purple", y_range_name="rating", legend_label="Total Average Rating", fill_alpha=0.25)
+p5.vbar(
+    x=dodge('Country', 0.15, range=p5.x_range),
+    bottom=0,
+    top='Total Average Rating',
+    width=0.3,
+    source=source,
+    color="purple",
+    y_range_name="rating",
+    legend_label="Total Average Rating",
+    fill_alpha=0.25
+)
 
 p5.xgrid.grid_line_color = None
 p5.legend.location = "top_left"
@@ -567,14 +613,14 @@ tabs = Tabs(tabs=[tab1, tab2, tab3, tab4, tab5])
 curdoc().clear()
 curdoc().add_root(tabs)
 curdoc().theme = 'light_minimal'
-curdoc().title = "Data Science Dashboard"
+curdoc().title = "Emarald-IT Dashboard"
 
 # =====================================================================
 # 9) Queries
 # =====================================================================
-#query that shows the countries with the lowest Total average rating with their respective number of transactions
+#query that shows the countries with the lowest/highest Total average rating with their respective number of transactions
 latest_idx = df_ratings_country.groupby("Country")["Date"].idxmax()
 latest_ratings = df_ratings_country.loc[latest_idx].copy()
 result = latest_ratings.merge(transactions_per_country, on="Country", how="left")
-result = result.sort_values("Total Average Rating", ascending=True)
-#print(result[["Country", "Total Average Rating", "Transactions"]].head(0-50))
+result = result.sort_values("Total Average Rating", ascending=True) #False for descending
+#print(result[["Country", "Total Average Rating", "Transactions"]].head(50))
